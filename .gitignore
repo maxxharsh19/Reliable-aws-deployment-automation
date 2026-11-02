@@ -1,0 +1,50 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+crash.log
+crash.*.log
+
+# Keep Terraform provider lock file tracked
+!.terraform.lock.hcl
+
+# Secrets and private keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
+
+# SSH credentials
+.ssh/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# Terraform plugin directories
+.terraform/
+
+# Runtime logs
+*.log
+
+# Saved Terraform plan files
+tfplan
