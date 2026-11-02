@@ -48,3 +48,6 @@ dist/
 
 # Saved Terraform plan files
 tfplan
+
+# Local assessment evidence
+/03_EVIDENCE/
