@@ -112,10 +112,25 @@ jobs:
                 "if ! command -v aws >/dev/null 2>&1; then apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y unzip curl && curl -fsSL https://awscli.amazonaws.com/v2/install.sh -o /tmp/awscli-install.sh && bash /tmp/awscli-install.sh --system; fi",
                 ("aws ecr get-login-password --region " + $region + " | docker login --username AWS --password-stdin " + $account + ".dkr.ecr." + $region + ".amazonaws.com"),
                 ("docker pull " + $image),
+                "OLD_IMAGE=$(docker inspect --format='{{.Config.Image}}' deployment-ops-api 2>/dev/null || true)",
                 "docker rm -f deployment-ops-api || true",
                 ("docker run -d --name deployment-ops-api --restart unless-stopped -p 80:5000 " + $image),
-                "sleep 5",
-                "curl -fsS http://localhost/health"
+                "for attempt in $(seq 1 12); do",
+                "  HEALTH=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' deployment-ops-api 2>/dev/null || echo stopped)",
+                "  if [ \"$HEALTH\" = healthy ] && curl -fsS http://localhost/health >/dev/null; then echo Deployment_healthy; exit 0; fi",
+                "  sleep 5",
+                "done",
+                "echo New_deployment_unhealthy_attempting_rollback",
+                "docker rm -f deployment-ops-api || true",
+                "if [ -n \"$OLD_IMAGE\" ]; then",
+                "  docker run -d --name deployment-ops-api --restart unless-stopped -p 80:5000 \"$OLD_IMAGE\"",
+                "  sleep 5",
+                "  curl -fsS http://localhost/health",
+                "  echo Rollback_restored_previous_image",
+                "else",
+                "  echo No_previous_image_recorded",
+                "fi",
+                "exit 1"
               ]
             }')
 
