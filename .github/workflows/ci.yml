@@ -1,11 +1,10 @@
 
-name: Deployment Operations API - CI
+name: Deployment Operations API - CI/CD
 
 on:
   push:
     branches:
       - master
-
   pull_request:
     branches:
       - master
@@ -14,7 +13,6 @@ permissions:
   contents: read
 
 jobs:
-
   test:
     name: Python Unit Tests
     runs-on: ubuntu-latest
@@ -24,10 +22,10 @@ jobs:
         working-directory: 02_CODEBASE/app
 
     steps:
-      - name: Checkout source code
+      - name: Checkout source
         uses: actions/checkout@v7
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -37,25 +35,58 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Run automated tests
-        run: |
-          python -m unittest -v test_app.py
+      - name: Run tests
+        run: python -m unittest -v test_app.py
 
-  docker-build:
-    name: Docker Image Build
+  publish:
+    name: Build and Push to Amazon ECR
     needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
-      - name: Checkout source code
+      - name: Checkout source
         uses: actions/checkout@v7
 
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t deployment-ops-api:${{ github.sha }} \
-            ./02_CODEBASE/app
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
 
-      - name: Verify Docker image
+      - name: Login to Amazon ECR
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
         run: |
-          docker image inspect deployment-ops-api:${{ github.sha }}
+          aws ecr get-login-password --region "$AWS_REGION" |
+            docker login --username AWS --password-stdin \
+            "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+      - name: Build and push Docker image
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$GITHUB_SHA"
+
+          docker build -t "$IMAGE_URI" ./02_CODEBASE/app
+          docker push "$IMAGE_URI"
+
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Verify ECR image
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+        run: |
+          aws ecr describe-images \
+            --repository-name "$ECR_REPOSITORY" \
+            --image-ids imageTag="$GITHUB_SHA" \
+            --region "$AWS_REGION"
