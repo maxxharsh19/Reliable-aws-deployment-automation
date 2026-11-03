@@ -109,6 +109,7 @@ jobs:
             '{
               commands: [
                 "set -e",
+                "command -v aws >/dev/null 2>&1 || (apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y awscli)",
                 ("aws ecr get-login-password --region " + $region + " | docker login --username AWS --password-stdin " + $account + ".dkr.ecr." + $region + ".amazonaws.com"),
                 ("docker pull " + $image),
                 "docker rm -f deployment-ops-api || true",
